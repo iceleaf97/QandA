@@ -43,23 +43,31 @@ texture.repeat.set( 3, 2 );
 
 function createModel(){
     var geometry = new THREE.SphereGeometry(10, 16, 16);
-    var material = new THREE.MeshPhongMaterial({
-        // color: 0xffffff,
+    var material2 = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
         map: texture,
-        // bumpMap: texture,
-        // bumpScale: 0.8,
+        bumpMap: texture,
+        bumpScale: 0.8,
         // wireframe: true
     });
-    var mesh = new THREE.Mesh(geometry, material);
+    var mesh = new THREE.Mesh(geometry, material2);
     mesh.position.set(-15, 0, 0);
     scene.add(mesh);
 
     var jsonLoader = new THREE.JSONLoader();
-    jsonLoader.load('./models/ball.json', addJson, false);
-    function addJson(geometry) {
-        var jsonMesh= new THREE.Mesh(geometry, material);
+    jsonLoader.load('./models/ballUV.json', addJson, addConsole, addError);
+    function addJson(geometry, material) {
+        var mtl= new THREE.MeshFaceMaterial(material);
+        var jsonMesh= new THREE.Mesh(geometry, material2);
         jsonMesh.position.set(15, 0, 0);
         scene.add(jsonMesh);
+    }
+    function addConsole() {
+        console.log("loading");
+    }
+
+    function addError() {
+        console.log("loading error");
     }
 
 }
