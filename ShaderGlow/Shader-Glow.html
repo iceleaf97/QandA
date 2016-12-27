@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<title>Shader - Glow (Three.js)</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+</head>
+<body>
+
+<script src="build/threeR83.min.js"></script>
+<script src="build/Detector.js"></script>
+<script src="build/stats.min.js"></script>
+<script src="build/OrbitControls.js"></script>
+<script src="build/THREEx.WindowResize.js"></script>
+<!-- GUI for experimenting with values -->		
+<script src='build/dat.gui.min.js'></script>
+
+<!-- ---------------- Custom Shader Code ------------------------ -->
+<script id="vertexShader" type="x-shader/x-vertex">
+uniform vec3 viewVector;
+uniform float c;
+uniform float p;
+varying float intensity;
+void main() 
+{
+    vec3 vNormal = normalize( normalMatrix * normal );
+	vec3 vNormel = normalize( normalMatrix * viewVector );
+	intensity = pow( c - dot(vNormal, vNormel), p );
+	
+    gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+}
+</script>
+
+<!-- fragment shader a.k.a. pixel shader -->
+<script id="fragmentShader" type="x-shader/x-vertex"> 
+uniform vec3 glowColor;
+varying float intensity;
+void main() 
+{
+	vec3 glow = glowColor * intensity;
+    gl_FragColor = vec4( glow, 1.0 );
+}
+</script>
+<!-- ----------------------------------------------------------- -->
+
+<div id="ThreeJS" style="position: absolute; left:0px; top:0px"></div>
+<script>
+/*
+	Three.js "tutorials by example"
+	Author: Lee Stemkoski
+	Date: July 2013 (three.js v59dev)
+*/
+
+// MAIN
+
+// standard global variables
+var container, scene, camera, renderer, controls, stats;
+var moonGlow;
+var jsonMesh;
+
+init();
+animate();
+
+// FUNCTIONS 		
+function init() 
+{
+	// SCENE
+	scene = new THREE.Scene();
+	// CAMERA
+	var SCREEN_WIDTH = window.innerWidth, SCREEN_HEIGHT = window.innerHeight;
+	var VIEW_ANGLE = 45, ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT, NEAR = 0.1, FAR = 20000;
+	camera = new THREE.PerspectiveCamera( VIEW_ANGLE, ASPECT, NEAR, FAR);
+	scene.add(camera);
+	camera.position.set(0,100,400);
+	camera.lookAt(scene.position);	
+	// RENDERER
+	if ( Detector.webgl )
+		renderer = new THREE.WebGLRenderer( {antialias:true} );
+	else
+		renderer = new THREE.CanvasRenderer(); 
+	renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+	container = document.getElementById( 'ThreeJS' );
+	container.appendChild( renderer.domElement );
+	// EVENTS
+	THREEx.WindowResize(renderer, camera);
+	// CONTROLS
+	controls = new THREE.OrbitControls( camera, renderer.domElement );
+	// STATS
+	stats = new Stats();
+	stats.domElement.style.position = 'absolute';
+	stats.domElement.style.bottom = '0px';
+	stats.domElement.style.zIndex = 100;
+	container.appendChild( stats.domElement );
+	// LIGHT
+	var light = new THREE.PointLight(0xffffff);
+	light.position.set(0,250,0);
+	scene.add(light);
+	// FLOOR
+	var floorTexture = new THREE.TextureLoader().load( 'images/checkerboard.jpg' );
+	floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping; 
+	floorTexture.repeat.set( 10, 10 );
+	var floorMaterial = new THREE.MeshBasicMaterial( { map: floorTexture, side: THREE.DoubleSide } );
+	var floorGeometry = new THREE.PlaneGeometry(1000, 1000, 10, 10);
+	var floor = new THREE.Mesh(floorGeometry, floorMaterial);
+	floor.position.y = -100.5;
+	floor.rotation.x = Math.PI / 2;
+	//scene.add(floor);
+	
+	// SKYBOX/FOG
+	var imagePrefix = "images/dawnmountain-";
+	var directions  = ["xpos", "xneg", "ypos", "yneg", "zpos", "zneg"];
+	var imageSuffix = ".png";
+
+//	別採用下列這個寫法
+//	var skyGeometry = new THREE.CubeGeometry( 5000, 5000, 5000 );
+//
+//	var materialArray = [];
+//	for (var i = 0; i < 6; i++)
+//		materialArray.push( new THREE.MeshBasicMaterial({
+//			map: THREE.ImageUtils.loadTexture( imagePrefix + directions[i] + imageSuffix ),
+//			side: THREE.BackSide
+//		}));
+//	var skyMaterial = new THREE.MeshFaceMaterial( materialArray );
+//	var skyBox = new THREE.Mesh( skyGeometry, skyMaterial );
+//	scene.add( skyBox );
+
+	var firstName = 'dawnmountain-';
+	var imgArray = [];
+	for (let i=0; i<directions.length; i++){
+	    imgArray.push(firstName + directions[i] + imageSuffix);
+	}
+	var skyBox = new THREE.CubeTextureLoader().setPath('images/').load(imgArray);
+	skyBox.format = THREE.RGBFormat;
+	scene.background = skyBox;
+
+
+
+
+
+	
+	////////////
+	// CUSTOM //
+	////////////
+
+	var sphereGeom = new THREE.SphereGeometry(100, 32, 16);
+    
+	var moonTexture = new THREE.TextureLoader().load( 'images/moon.jpg' );
+	var moonMaterial = new THREE.MeshBasicMaterial( { map: moonTexture } );
+    var moon = new THREE.Mesh(sphereGeom, moonMaterial);
+	moon.position.set(0,0,0);
+//    scene.add(moon);
+
+	// create custom material from the shader code above
+	//   that is within specially labeled script tags
+	var customMaterial = new THREE.ShaderMaterial( 
+	{
+	    uniforms: 
+		{ 
+			"c":   { type: "f", value: 1.0 },
+			"p":   { type: "f", value: 1.4 },
+			glowColor: { type: "c", value: new THREE.Color(0xffff00) },
+			viewVector: { type: "v3", value: camera.position }
+		},
+		vertexShader:   document.getElementById( 'vertexShader'   ).textContent,
+		fragmentShader: document.getElementById( 'fragmentShader' ).textContent,
+		side: THREE.FrontSide,
+		blending: THREE.AdditiveBlending,
+		transparent: true
+	}   );
+		
+	moonGlow = new THREE.Mesh( sphereGeom.clone(), customMaterial.clone() );
+    moonGlow.position.set(moon.position.x, moon.position.y, moon.position.z);
+	moonGlow.scale.multiplyScalar(1.2);
+//	scene.add( moonGlow );
+	var jsonLoader = new THREE.JSONLoader();
+	jsonLoader.load('models/monkey.json', addJson);
+	function addJson(geometry){
+	    jsonMesh = new THREE.Mesh(geometry, customMaterial);
+	    jsonMesh.position.set(20, 5, 0);
+	    jsonMesh.scale.set(20, 20, 20);
+	    scene.add(jsonMesh);
+	}
+
+
+	
+
+	
+	/////////
+	// GUI //
+	/////////
+	
+	var gui = new dat.GUI();
+	var parameters =
+	{ c: 1.0, p: 1.4, bs: false, fs: true, nb: false, ab: true, mv: true, color: "#ffff00" };
+	
+	var top = gui.addFolder('Glow Shader Attributes');
+	
+	var cGUI = top.add( parameters, 'c' ).min(0.0).max(1.0).step(0.01).name("c").listen();
+	cGUI.onChange( function(value) { 
+		moonGlow.material.uniforms[ "c" ].value = parameters.c;
+        jsonMesh.material.uniforms[ "c" ].value = parameters.c;
+	});
+	
+	var pGUI = top.add( parameters, 'p' ).min(0.0).max(6.0).step(0.01).name("p").listen();
+	pGUI.onChange( function(value) { 
+		moonGlow.material.uniforms[ "p" ].value = parameters.p;
+        jsonMesh.material.uniforms[ "p" ].value = parameters.p;
+
+    });
+
+	var glowColor = top.addColor( parameters, 'color' ).name('Glow Color').listen();
+	glowColor.onChange( function(value) {
+		moonGlow.material.uniforms.glowColor.value.setHex( value.replace("#", "0x"));
+        jsonMesh.material.uniforms.glowColor.value.setHex( value.replace("#", "0x"));
+
+    });
+	top.open();
+
+
+    // toggle mesh visibility
+	var folder3 = gui.addFolder('Miscellaneous');
+	var mvGUI = folder3.add( parameters, 'mv' ).name("Meshes-Visible").listen();
+	mvGUI.onChange( function(value) { 
+		moon.visible = value;
+        jsonMesh.visible = value;
+    });
+	folder3.open();
+	
+}
+
+function animate() 
+{
+    requestAnimationFrame( animate );
+	render();		
+	update();
+}
+
+function update()
+{
+	controls.update();
+	stats.update();
+	moonGlow.material.uniforms.viewVector.value = 
+		new THREE.Vector3().subVectors( camera.position, moonGlow.position );
+	if(jsonMesh){
+//        jsonMesh.rotation.y += 0.1;
+        jsonMesh.material.uniforms.viewVector.value =
+            new THREE.Vector3().subVectors( camera.position, jsonMesh.position );
+
+	}
+
+}
+
+function render() 
+{
+	renderer.render( scene, camera );
+}
+
+</script>
+
+</body>
+</html>
